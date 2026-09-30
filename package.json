@@ -1,7 +1,7 @@
 {
   "name": "ed-recall",
-  "version": "0.1.0",
-  "description": "Local Ed Discussion archive and passage search for people and coding agents",
+  "version": "0.2.0",
+  "description": "Agent-first local Ed Discussion archive and search",
   "type": "module",
   "engines": { "node": ">=24.0.0" },
   "bin": { "ed-recall": "bin/ed-recall.mjs" },
@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
-    "commander": "^14.0.0",
     "fast-xml-parser": "^5.3.0"
   },
   "optionalDependencies": { "@napi-rs/keyring": "^2.1.0" }

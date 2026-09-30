@@ -8,7 +8,7 @@ This is a beta API adapter, not a specification of Ed's stable behavior.
 - [smartspot2/edapi implementation](https://github.com/smartspot2/edapi/blob/master/edapi/edapi.py): `https://us.edstem.org/api/`, Bearer authentication, `/user`, `/courses/{id}/threads` with `limit`, `offset`, `sort=new`, and `/threads/{id}`.
 - [EPFL Ed Discussion guide](https://www.epfl.ch/education/teaching/wp-content/uploads/2022/09/QUICKSTART_EdDiscussion.pdf): API-token setup, beta status, lack of a stable API guarantee, and inspecting actual requests for other routes.
 - [Keyring binding documentation](https://github.com/Brooooooklyn/keyring-node): OS stores and the explicitly selected persistent Linux Secret Service backend.
-- [Codex skill guidance](https://developers.openai.com/blog/eval-skills), [Pi skills](https://github.com/badlogic/pi-skills): portable skill structure and user installation conventions.
+- [Codex skill guidance](https://learn.chatgpt.com/docs/build-skills), [Pi skills](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md), [Claude Code skills](https://code.claude.com/docs/en/skills): invocation syntax, skill structure, and user installation locations.
 
 The repository contains no real student data or recorded live Ed response. `test/fixtures/ed.mjs` constructs synthetic examples following those observations. Nothing here establishes that current Ed servers still use all these shapes.
 
@@ -34,4 +34,4 @@ Follow the complete command sequence and comparison checklist in the [README](..
 
 The CLI has no live mutation routes. To test updates, add/edit replies manually only in a course where you are allowed to do so. Tests must not cause posts, messages, or notifications automatically.
 
-Optional OS credential-store smoke check: run `ed-recall auth login`, close the terminal, open a fresh one without `EDSTEM_TOKEN`, run `ed-recall auth status`, then `ed-recall auth logout` and `ed-recall auth status --offline`. The final command should report no token and exit 1. Repeat on each target OS before declaring that platform's persistent-storage integration verified. Backend unit tests use a mock entry and cannot establish real keychain availability.
+Optional OS credential-store smoke check: run `ed-recall setup` with the hidden token prompt, close the terminal, open a fresh one without `EDSTEM_TOKEN`, and request `sync` through the installed agent skill. Then run `ed-recall logout`; another sync request should report that authentication is missing. Use `ed-recall.cmd` for these commands in Windows PowerShell. Repeat on each target OS before declaring that platform's persistent-storage integration verified. Backend unit tests use a mock entry and cannot establish real keychain availability.
