@@ -1,0 +1,21 @@
+{
+  "name": "ed-recall",
+  "version": "0.1.0",
+  "description": "Local Ed Discussion archive and passage search for people and coding agents",
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "bin": { "ed-recall": "bin/ed-recall.mjs" },
+  "exports": { "./core": "./src/core/index.mjs" },
+  "files": ["bin/", "src/", "skills/", "docs/", "README.md"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
+    "commander": "^14.0.0",
+    "fast-xml-parser": "^5.3.0"
+  },
+  "optionalDependencies": { "@napi-rs/keyring": "^2.1.0" }
+}

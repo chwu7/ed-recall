@@ -1,0 +1,14 @@
+node_modules/
+*.tgz
+coverage/
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.db*
+archive/
+.ed-recall/
+token
+tokens.json
+*.tmp
+.package-smoke/
