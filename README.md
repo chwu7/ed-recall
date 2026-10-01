@@ -7,7 +7,7 @@ Ask an agent about your Ed Discussion threads and get answers linked to the orig
 ## The workflow
 
 1. Install Node.js 24 or newer and Git, then install this package with npm.
-2. In a normal terminal, run **`ed-recall setup` once**. It prompts for a token without displaying it, lets you choose courses, and offers to install the agent skill.
+2. Create a token at [Ed's API-token settings (US)](https://edstem.org/us/settings/api-tokens), then run **`ed-recall setup` once** in a normal terminal. It prompts for the token without displaying it, lets you choose courses, and offers to install the agent skill. For another region, use the matching Ed settings page; setup prints its URL.
 3. Open Pi, Codex, or Claude Code. Invoke the skill to sync, then ask a question:
 
    | Agent | Sync | Ask |
