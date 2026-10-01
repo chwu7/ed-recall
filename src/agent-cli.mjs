@@ -20,6 +20,10 @@ One-time terminal commands:
   ed-recall skill path
   ed-recall logout
 
+Recovery:
+  ed-recall agent sync --resume [--course ID]
+  ed-recall agent sync --refresh [--course ID]
+
 Use the installed skill in your agent to sync and ask questions.
 The "agent" commands are a JSON interface used by that skill.
 On Windows PowerShell, use ed-recall.cmd if the npm .ps1 shim is blocked.`;
@@ -32,7 +36,7 @@ function parse(argv) {
       if (i + 1 >= argv.length || argv[i + 1].startsWith('--')) throw new Error('A command option is missing its value. Run ed-recall --help.');
       if (options[arg] !== undefined) throw new Error('A command option was repeated. Run ed-recall --help.');
       options[arg] = argv[++i];
-    } else if (arg === '--force') options[arg] = true;
+    } else if (arg === '--force' || arg === '--resume' || arg === '--refresh') options[arg] = true;
     else if (arg.startsWith('-')) throw new Error('Unknown option. Run ed-recall --help.');
     else words.push(arg);
   }
@@ -57,6 +61,9 @@ export async function main(argv = process.argv) {
     if (argv.slice(2).includes('--help') || argv.slice(2).includes('-h') || argv.length === 2) { out(HELP); return; }
     if (argv.slice(2).includes('--version') || argv.slice(2).includes('-V')) { out('0.2.0'); return; }
     const { options, words } = parse(argv);
+    if (options['--resume'] && (words[0] !== 'agent' || words[1] !== 'sync')) throw new Error('--resume is only supported by agent sync.');
+    if (options['--refresh'] && (words[0] !== 'agent' || words[1] !== 'sync')) throw new Error('--refresh is only supported by agent sync.');
+    if (options['--resume'] && options['--refresh']) throw new Error('Choose either --resume or --refresh.');
     agentMode = words[0] === 'agent';
     const root = resolve(dataRoot(options['--data-dir']));
     const config = await loadConfig(root);
@@ -154,14 +161,15 @@ export async function main(argv = process.argv) {
       const tracked = account.selectedCourses.length ? account.selectedCourses : (await syncStatus(dir, [])).courses.map(c => c.id);
       const courses = options['--course'] ? [resolveCourse(identity.courses, options['--course'])] : tracked.map(key => resolveCourse(identity.courses, key));
       if (!courses.length) throw new Error('No selected courses. Run setup in a terminal, or specify --course <id-or-code>.');
-      await lock(dir, async () => {
+      const result = await lock(dir, async () => {
         const index = new SearchIndex(dir);
         try {
           await index.reconcile(dir);
-          const result = await syncCourses({ client, dir, courses, index, onProgress: message => process.stderr.write(clean(message) + '\n') });
-          json(result); if (result.failures.length) process.exitCode = 1;
+          return await syncCourses({ client, dir, courses, index, resumeOnly: Boolean(options['--resume']), refresh: Boolean(options['--refresh']),
+            onProgress: message => process.stderr.write(clean(message) + '\n') });
         } finally { index.close(); }
       });
+      json({ ...result, status: await syncStatus(dir, courses.map(c => c.id)) }); if (result.failures.length) process.exitCode = 1;
       return;
     }
     if (command === 'search' || command === 'context') {

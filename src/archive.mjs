@@ -8,9 +8,11 @@ const decode = text => JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
 const line = text => String(text ?? '').replace(/[\r\n\x00-\x1f\x7f]/g, ' ');
 export function renderThread(thread, course) {
   const metadata = { schemaVersion: 1, id: thread.id, courseId: thread.courseId, number: thread.number, title: thread.title,
-    url: thread.url, createdAt: thread.createdAt, updatedAt: thread.updatedAt, course };
+    url: thread.url, createdAt: thread.createdAt, updatedAt: thread.updatedAt, course,
+    ...(thread.warnings?.length ? { warnings: thread.warnings } : {}) };
   let output = `---\n${JSON.stringify(metadata, null, 2)}\n---\n\n# ${line(thread.title)}\n\nCourse: ${line(course.code)} — ${line(course.name)}\n\nThread: #${thread.number ?? '?'} · ID ${thread.id}\n\nSource: ${thread.url}\n\nCreated: ${thread.createdAt ?? 'unknown'} · Updated: ${thread.updatedAt ?? 'unknown'}\n`;
-  const warnings = [];
+  const warnings = [...(thread.warnings ?? [])];
+  if (thread.warnings?.length) output += `\n${thread.warnings.map(w => `> Archive warning: ${line(w)}`).join('\n')}\n`;
   const visit = (node, depth, parentKey) => {
     const key = `${node.kind}:${node.id}`;
     const info = { id: key, sourceId: node.id, parentId: parentKey, kind: node.kind, depth, author: node.author, role: node.role,

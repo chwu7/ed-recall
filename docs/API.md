@@ -10,7 +10,7 @@ This is a beta API adapter, not a specification of Ed's stable behavior.
 - [Keyring binding documentation](https://github.com/Brooooooklyn/keyring-node): OS stores and the explicitly selected persistent Linux Secret Service backend.
 - [Codex skill guidance](https://learn.chatgpt.com/docs/build-skills), [Pi skills](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md), [Claude Code skills](https://code.claude.com/docs/en/skills): invocation syntax, skill structure, and user installation locations.
 
-The repository contains no real student data or recorded live Ed response. `test/fixtures/ed.mjs` constructs synthetic examples following those observations. Nothing here establishes that current Ed servers still use all these shapes.
+The repository contains no real student data or recorded live Ed response. `test/fixtures/ed.mjs` constructs synthetic examples following those observations. A limited US live-account check on 2026-09-30 inspected only structural counters: two threads returned 30/15 replies with 2/1 deleted replies, matching reported counts of 28/14 after excluding deletion markers. Another thread reported 4 replies but returned only 2; the cause is unverified. These observations do not validate every API shape or reply pagination.
 
 ## Implemented assumptions
 
@@ -22,8 +22,10 @@ The repository contains no real student data or recorded live Ed response. `test
 | Course list | `threads[]`; limit/offset pagination; stable enumeration; deduplicate IDs | Synthetic multipage/pinned fixtures; live pending |
 | Thread detail | `thread` object, `users[]`, XML `content`, `answers[]`, recursive `comments[]` | Synthetic nested fixtures; live pending |
 | Reply pagination | Observed documentation embeds replies. Also accept explicit `{items,next,total?}` collection envelopes and follow same-host URLs recursively | Defensive extension only; synthetic envelope tests **do not validate Ed's actual megathread pagination** |
-| Truncation | Reject unsupported continuation markers, missing collections, cyclic/duplicate replies, and mismatched `reply_count` | Fixture-tested; count semantics need live confirmation |
-| Incremental refresh | Re-fetch every thread on a new sync; skip committed work only while resuming an unfinished run | Local integration-tested; no reliance on reply timestamp propagation |
+| Truncation | Reject unsupported continuation markers, missing collections, cyclic/duplicate replies, and explicit collection-total mismatches | Fixture-tested; megathread continuation remains unverified |
+| Reply counter | Accept total or non-deleted reply count; preserve unexplained discrepancies as coverage warnings in archive and retrieval | Synthetic fixtures plus limited US structural observation; unresolved discrepancy remains uncertain |
+| Incremental refresh | Skip successful courses for 24 hours; re-fetch threads when stale or explicitly using `--refresh`; automatically resume pending batches; `sync --resume` never refreshes finished courses | Integration-tested including killed subprocess, stale-lock recovery, cached courses and explicit refresh; no reliance on reply timestamp propagation |
+| Recovery | Existing request retries plus one checkpoint retry for exhausted network/server failures; persist final failures; authentication and exhausted rate limits halt | Synthetic fixtures and real local SQLite; process restarts are performed by agent/user |
 | Content conversion | Ed XML to Markdown; preserve unrecognized/invalid content as visible fenced XML | Local tests; live rich-content comparison pending |
 
 Some beta shape changes can only be detected with live comparison (for example, an undocumented field that hides a continuation without a recognizable marker). The adapter cannot prove completeness for an unknown protocol. It deliberately errors on known indicators instead of substituting empty arrays. If Ed uses another continuation route, obtain a sanitized observed fixture and add that precise contract in `src/core/api.mjs`, with an integration test, before claiming support.

@@ -2,7 +2,7 @@
 
 Ask an agent about your Ed Discussion threads and get answers linked to the original conversations. `ed-recall` saves the threads you can access as Markdown and keeps a local SQLite search index. It uses your **Ed API token**. It does not ask for your Ed password or scrape browser cookies.
 
-**This version is not published to the npm registry.** Install it directly from GitHub with npm. Ed describes its API as beta; the adapter has fixture coverage but has **not** been checked with a live account. See [API limitations](#api-limitations) and [the live-account check](#check-with-your-ed-account).
+**This version is not published to the npm registry.** Install it directly from GitHub with npm. Ed describes its API as beta; the adapter has fixture coverage and a limited US live-account check. See [API limitations](#api-limitations) and [the live-account check](#check-with-your-ed-account).
 
 ## The workflow
 
@@ -18,7 +18,7 @@ Ask an agent about your Ed Discussion threads and get answers linked to the orig
 
 These are **agent skill invocations** in the agent's chat, not commands to type in PowerShell. They follow the current [Claude Code](https://code.claude.com/docs/en/skills), [Pi](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md), and [Codex](https://learn.chatgpt.com/docs/build-skills) skill conventions. You can also ask in ordinary language, such as “Using ed-recall, what did staff say about late submissions? Cite the threads.” If your agent does not discover the skill, restart its session after installation.
 
-An explicit `sync` checks Ed even when the local archive is recent. For a question, the skill checks archive status and syncs when needed, searches relevant passages, reads surrounding thread content, and writes the answer with Ed links. If it cannot find enough evidence, it should say so. The local engine performs keyword search; **the agent** interprets the evidence and composes the answer. No external AI service is called by the engine itself.
+`sync` skips courses successfully synced within the last 24 hours. Use `refresh` in the skill, or `ed-recall agent sync --refresh`, when you want an immediate rescan. For a question, the skill checks archive status and syncs when needed, searches relevant passages, reads surrounding thread content, and writes the answer with Ed links. If it cannot find enough evidence, it should say so. The local engine performs keyword search; **the agent** interprets the evidence and composes the answer. No external AI service is called by the engine itself.
 
 ## Install and set up
 
@@ -85,13 +85,19 @@ Install locations:
 
 For manual installation, run `ed-recall skill path` to print the bundled file location, then copy that file to the directory in the table. From this checkout, the file is [skills/ed-recall/SKILL.md](skills/ed-recall/SKILL.md). Restart the agent after adding or changing a skill. The agent needs shell access to the installed `ed-recall` command, access to the local archive, and network access when syncing; its own sandbox or approval settings may affect those operations. An agent can answer from an existing archive while offline, with the archive's freshness disclosed.
 
-Use `sync` or `sync <course-code-or-id>` as the skill request when you want a new Ed scan. Course codes must match exactly, ignoring case; if the same code exists in two terms, use the numeric course ID. To remove the skill, delete the installed `ed-recall` skill directory after checking its contents.
+Use `sync` or `sync <course-code-or-id>` as the skill request to resume pending work or start a new Ed scan. Use `resume` (optionally followed by a course) to retry only unfinished courses. Course codes must match exactly, ignoring case; if the same code exists in two terms, use the numeric course ID. To remove the skill, delete the installed `ed-recall` skill directory after checking its contents.
 
 ## How sync and search work
 
-The first sync walks all accessible thread-list pages for each selected course and fetches the original post, answers, comments, and nested comments. Subsequent syncs re-fetch every listed thread so edited replies and new comments are included even if Ed does not update a thread timestamp. Unchanged content is detected by hash and is not rewritten. That approach can take time on large courses.
+The first sync walks all accessible thread-list pages for each selected course and fetches the original post, answers, comments, and nested comments. Courses completed within the last 24 hours are skipped without listing or fetching their threads. Stale courses and explicit `--refresh` runs re-fetch every listed thread so edited replies and new comments are included even if Ed does not update a thread timestamp. Unchanged content is detected by hash and is not rewritten. That approach can take time on large courses.
 
-Requests are sequential and spaced at least 500 ms apart. The client has timeouts and bounded retries for network errors, HTTP 429, and server errors. It uses only your token's permissions. Sync checkpoints completed threads. If interrupted or partly failed, invoke sync again to resume; a complete later sync revisits all threads. Concurrent writers are blocked by a local lock. Previously archived threads remain in the local historical archive if they later disappear from Ed or become inaccessible.
+Requests are sequential and spaced at least 500 ms apart. The client has timeouts and bounded retries for network errors, HTTP 429, and server errors. After request retries are exhausted, sync automatically retries unfinished work once for network/server failures. Authentication errors and exhausted rate limits stop the run; other thread failures are recorded while remaining threads and courses continue. It uses only your token's permissions.
+
+Sync checkpoints each archived thread and tracks the pending course batch. After an interruption, invoking sync again resumes pending work and skips finished courses. Once the batch finishes, later syncs skip recent courses and refresh stale ones. `ed-recall agent sync --resume` explicitly retries only unfinished courses; it does nothing when all selected courses are complete, even if stale. `--refresh` deliberately starts a new snapshot in the selected scope, including any unfinished courses; it cannot be combined with `--resume`. Concurrent writers are blocked by a local lock, and a dead process's lock is recovered on restart. Previously archived threads remain in the local historical archive if they later disappear from Ed or become inaccessible.
+
+The agent skill uses a long shell timeout or a persistent process handle, checks status even after failure, and automatically resumes a terminated process at most twice while checkpoints advance. A killed process cannot restart itself: if the agent stops too, run `ed-recall.cmd agent sync --resume` in PowerShell, optionally adding `--course <id>`. Run `ed-recall.cmd agent status` separately to inspect progress, active writers, saved failures, and coverage warnings.
+
+Ed's `reply_count` can exclude deleted replies that still appear in the returned tree. Both total and non-deleted counts are accepted. Other count differences become persistent reply-coverage warnings: the accessible replies are archived and sync continues, but full reply coverage is uncertain. Warnings appear in Markdown, status, search, context, and read results. Explicit truncation/continuation errors still leave the thread unfinished for recovery.
 
 Each thread has a Markdown file containing course, title, number/ID, original Ed URL, dates, original post, answers, and the reply hierarchy. The converter preserves code, links, and math where possible and keeps unknown content visibly fenced instead of silently dropping it. Attachments remain links and are not downloaded. SQLite FTS5 indexes individual passages and stores their thread metadata; **Markdown is the archive of record**, and the index can be rebuilt from it.
 
@@ -117,19 +123,21 @@ The engine exposes JSON operations for the skill under `ed-recall agent ...`; th
 ed-recall agent status
 ed-recall agent courses
 ed-recall agent sync --course CS101
+ed-recall agent sync --resume
+ed-recall agent sync --refresh --course CS101
 ed-recall agent search "late submissions" --course CS101 --limit 6
 ed-recall agent context "What did staff say about late submissions?" --course CS101
 ed-recall agent read 987654
 ed-recall agent reindex
 ```
 
-Use `ed-recall.cmd` in PowerShell. `read` takes the global thread ID returned by search, not the course's displayed thread number. `context` accepts `--max-chars` (default 16000). The JSON has `schemaVersion: 1`; search/context include archive freshness. Progress and diagnostics go to stderr. Exit code 1 means an error or incomplete sync. The skill handles these operations; most users only need setup and the agent's chat.
+Use `ed-recall.cmd` in PowerShell. `read` takes the global thread ID returned by search, not the course's displayed thread number. `context` accepts `--max-chars` (default 16000). The JSON has `schemaVersion: 1`; search/context include archive freshness. Sync reports include final status, retries, and skipped course IDs. Status includes per-course checkpoint/total counts, saved failures, and `coverageUncertain`; `syncRunning` indicates another live archive writer. Progress and diagnostics go to stderr. Exit code 1 means an error or incomplete sync; warnings alone return code 0 and remain visible for retrieval. The skill handles these operations; most users only need setup and the agent's chat.
 
 ## API limitations
 
 The Ed adapter is isolated in `src/core/api.mjs`; content conversion is in `src/core/content.mjs`. `ed-recall/core` exports these reusable modules for a future browser version. Fetch and sleep are injectable for tests. Browser authentication, CORS, persistence, and UI still need separate work.
 
-Ed's API is described as beta and its thread routes are incompletely documented. This project reviewed public client source and documentation on 2026-09-30 and tested representative synthetic responses; it did **not** verify the current server responses with a live Ed token. The expected reply arrays and defensive pagination handling may need adjustment for large threads. Unknown continuation shapes and reply-count mismatches fail visibly rather than claim a complete archive. See [API evidence and assumptions](docs/API.md).
+Ed's API is described as beta and its thread routes are incompletely documented. This project reviewed public client source and documentation on 2026-09-30 and tested representative synthetic responses. A limited US live-account check found deleted replies excluded from two reply counters and one unexplained counter discrepancy; no private responses are stored in this repository. The expected reply arrays and defensive pagination handling may need adjustment for large threads. Unknown continuation shapes fail visibly; unexplained reply counts are archived with coverage warnings. A completed sync means the supported accessible responses were processed, and does not prove that Ed returned every reply. See [API evidence and assumptions](docs/API.md).
 
 Other limits: no attachment download or OCR; no lessons, chat, or private messages; no semantic embeddings; no browser app; no automatic sync schedule. The Windows credential store was smoke tested with a synthetic secret; macOS/Linux credential storage and live Ed behavior remain unverified. A course with private posts is limited to what the token owner may access.
 
@@ -141,7 +149,7 @@ Do not paste your token into chat, an issue, or a command argument. After local 
 2. Run `ed-recall agent status` and `ed-recall agent courses`. Confirm selection, account, completion, and thread counts. Inspect the Markdown files under the reported data directory.
 3. In a course with **over 100 accessible threads**, compare the oldest, newest, and pinned threads with Ed. A smaller course cannot validate multipage listing.
 4. Compare a thread with an original post, answer, comment, and nested comment against the Markdown and `ed-recall agent read <thread-id>`. Check hierarchy, author roles, dates, code/math, reply counts, and returned URL. Test a large thread to discover whether Ed paginates replies in a different format.
-5. If posting is allowed, add a test nested comment in Ed, sync again, edit it in Ed, and sync again. Confirm the Markdown and `agent search` reflect the latest text without duplicates. A second unchanged sync should have `changed: 0`.
+5. If posting is allowed, add a test nested comment in Ed, run `agent sync --refresh`, edit it in Ed, and refresh again. Confirm the Markdown and `agent search` reflect the latest text without duplicates. A second unchanged refresh should have `changed: 0`; ordinary sync should skip the recent course with `fetched: 0`.
 6. Interrupt a sync with Ctrl+C after several threads, invoke sync again, and confirm completion. Run `ed-recall agent reindex` and repeat a search to verify index rebuild. Ask the skill an evidence question and an unrelated question; check citations and the insufficient-evidence response.
 
 The CLI sends no posts or edits to Ed. If the beta API response differs, capture only a **sanitized structural example**: route, status, keys, array nesting, and the error. Remove authorization headers, private text, names, and identifying IDs before sharing it.
@@ -155,7 +163,8 @@ The CLI sends no posts or edits to Ed. If the beta API response differs, capture
 | Credential store unavailable or locked | Unlock/install the OS store and optional keyring dependency, or provide `EDSTEM_TOKEN` to setup and the agent process. No token file fallback exists. |
 | HTTP 401 | Check token validity, selected region, and whether `EDSTEM_TOKEN` overrides a saved token. Re-run setup. |
 | HTTP 403/404 | Check access in Ed; a removed thread may remain in the local archive. |
-| HTTP 429 or interrupted sync | Wait, then invoke sync again. Check `agent status` for incomplete courses. |
+| HTTP 429 or interrupted sync | After a rate-limit pause, run `agent sync --resume`. If status says `syncRunning: true`, observe the existing writer first. |
+| Reply-coverage warning | Accessible replies were archived; full coverage is uncertain. Compare with Ed and inspect the API shape before treating the thread as complete evidence. |
 | A reply collection or page is rejected | The beta API may have changed. Follow the live-account check and add a sanitized fixture before adapting `src/core/api.mjs`. |
 | No evidence for a question | Check archive freshness and course selection, sync, try shorter terms/synonyms, or read a known thread. |
 | Index unreadable | With no other ed-recall process running, run `ed-recall agent reindex`; Markdown is retained. |

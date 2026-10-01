@@ -72,7 +72,7 @@ export class SearchIndex {
       seen.add(signature); counts.set(row.thread_id, (counts.get(row.thread_id) ?? 0) + 1);
       const thread = JSON.parse(row.thread), node = JSON.parse(row.node);
       results.push({ threadId: thread.id, threadNumber: thread.number, course: thread.course, title: thread.title, url: thread.url,
-        passageId: node.id, chunk: Number(row.chunk), parentId: node.parentId, author: node.author, role: node.role, createdAt: node.createdAt, updatedAt: node.updatedAt,
+        warnings: thread.warnings ?? [], passageId: node.id, chunk: Number(row.chunk), parentId: node.parentId, author: node.author, role: node.role, createdAt: node.createdAt, updatedAt: node.updatedAt,
         rank: row.rank, snippet: row.snippet, text: row.body, archivePath: thread.path, line: node.line });
       if (results.length >= limit) break;
     }
@@ -91,7 +91,7 @@ export class SearchIndex {
       seen.add(key);
       const text = node.text.slice(0, maxChars - used); used += text.length;
       passages.push({ threadId: thread.id, threadNumber: thread.number, title: thread.title, course: thread.course, url: thread.url,
-        passageId: node.id, parentId: node.parentId, role: node.role, author: node.author, reason, text, truncated: text.length < (node.fullLength ?? node.text.length),
+        warnings: thread.warnings ?? [], passageId: node.id, parentId: node.parentId, role: node.role, author: node.author, reason, text, truncated: text.length < (node.fullLength ?? node.text.length),
         archivePath: thread.path, line: node.line });
     };
     // Allocate evidence before surrounding material, so large posts cannot bury matches.

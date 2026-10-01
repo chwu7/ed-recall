@@ -1,6 +1,6 @@
 // All Ed-specific wire assumptions live here. See docs/API.md for provenance.
 export class EdError extends Error {
-  constructor(message, status = 0) { super(message); this.name = 'EdError'; this.status = status; }
+  constructor(message, status = 0, { retryable = false } = {}) { super(message); this.name = 'EdError'; this.status = status; this.retryable = retryable; }
 }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 export const regions = ['us', 'au', 'eu'];
@@ -31,11 +31,11 @@ export class EdClient {
       try {
         response = await this.fetch(url, { headers: { Authorization: `Bearer ${this.#token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(30000) });
       } catch {
-        if (attempt === 4) throw new EdError('Ed request failed after retries (network, timeout, or redirect).');
+        if (attempt === 4) throw new EdError('Ed request failed after retries (network, timeout, or redirect).', 0, { retryable: true });
         await this.sleep(1000 * 2 ** attempt); continue;
       }
       if (response.status === 429 || response.status >= 500) {
-        if (attempt === 4) throw new EdError(`Ed returned HTTP ${response.status}; retry sync later.`, response.status);
+        if (attempt === 4) throw new EdError(`Ed returned HTTP ${response.status}; retry sync later.`, response.status, { retryable: response.status >= 500 });
         const header = response.headers.get('retry-after');
         const seconds = header && /^\d+(\.\d+)?$/.test(header) ? Number(header) * 1000 : Date.parse(header) - Date.now();
         if (seconds > 300000) throw new EdError('Ed requests a long rate-limit pause; retry sync later.', 429);
@@ -82,7 +82,7 @@ export class EdClient {
     if (!data?.thread || id(data.thread.id) !== id(threadId)) throw new EdError('Unexpected thread-detail response shape.');
     if (data.has_more || data.next) throw new EdError('Unsupported thread-detail continuation; thread not archived.');
     const users = new Map((data.users ?? []).map(u => [String(u.id), u]));
-    const seen = new Set();
+    const seen = new Set(); let deletedReplies = 0;
     const collect = async (value, label) => {
       // Arrays are the observed shape. Explicit items/next envelopes are a defensive extension,
       // covered by synthetic fixtures, not claimed as a verified Ed contract.
@@ -106,6 +106,7 @@ export class EdClient {
       const identity = `${kind === 'post' ? 'post' : 'reply'}:${nodeId}`;
       if (seen.has(identity)) throw new EdError('Duplicate or cyclic reply IDs in thread.');
       seen.add(identity);
+      if (kind !== 'post' && node.deleted_at) deletedReplies++;
       if (seen.size > 100000) throw new EdError('Thread exceeds reply safety limit.');
       if (typeof node.content !== 'string') throw new EdError('Missing post content.');
       if (node.has_more || node.comments_next || node.answers_next) throw new EdError('Unsupported reply continuation; thread not archived.');
@@ -123,9 +124,13 @@ export class EdClient {
     const thread = data.thread;
     const post = await walk(thread, null, 'post');
     if (typeof thread.title !== 'string') throw new EdError('Missing thread title.');
-    if (thread.reply_count != null && thread.reply_count !== seen.size - 1) throw new EdError('Reply count does not match fetched replies; live API shape needs verification.');
+    const returnedReplies = seen.size - 1, visibleReplies = returnedReplies - deletedReplies;
+    // Live responses can include deleted replies that reply_count excludes. The counter
+    // can also disagree with the accessible tree; preserve that tree with a coverage warning.
+    const warnings = thread.reply_count != null && thread.reply_count !== returnedReplies && thread.reply_count !== visibleReplies
+      ? [`Ed reports ${thread.reply_count} replies but returned ${returnedReplies} (${visibleReplies} non-deleted); reply coverage is uncertain.`] : [];
     return { id: id(thread.id), courseId: id(thread.course_id), number: thread.number ?? null, title: thread.title,
       url: `https://edstem.org/${this.region}/courses/${id(thread.course_id)}/discussion/${id(thread.id)}`,
-      createdAt: thread.created_at ?? null, updatedAt: thread.updated_at ?? null, post };
+      createdAt: thread.created_at ?? null, updatedAt: thread.updated_at ?? null, warnings, post };
   }
 }
