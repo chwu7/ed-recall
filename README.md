@@ -2,11 +2,11 @@
 
 Ask an agent about your Ed Discussion threads and get answers linked to the original conversations. `ed-recall` saves the threads you can access as Markdown and keeps a local SQLite search index. It uses your **Ed API token**. It does not ask for your Ed password or scrape browser cookies.
 
-**This version is not published to npm.** Install the package from this repository. Ed describes its API as beta; the adapter has fixture coverage but has **not** been checked with a live account. See [API limitations](#api-limitations) and [the live-account check](#check-with-your-ed-account).
+**This version is not published to the npm registry.** Install it directly from GitHub with npm. Ed describes its API as beta; the adapter has fixture coverage but has **not** been checked with a live account. See [API limitations](#api-limitations) and [the live-account check](#check-with-your-ed-account).
 
 ## The workflow
 
-1. Install Node.js 24 or newer, then install this package with npm.
+1. Install Node.js 24 or newer and Git, then install this package with npm.
 2. In a normal terminal, run **`ed-recall setup` once**. It prompts for a token without displaying it, lets you choose courses, and offers to install the agent skill.
 3. Open Pi, Codex, or Claude Code. Invoke the skill to sync, then ask a question:
 
@@ -22,29 +22,27 @@ An explicit `sync` checks Ed even when the local archive is recent. For a questi
 
 ## Install and set up
 
-You need an Ed account with access to Discussion, a personal API token, internet access for syncing, and Node.js **24+** with npm. Check your Node version with `node --version`. Get the token from Ed's API-token settings for your region; `setup` prints the relevant URL.
+You need an Ed account with access to Discussion, a personal API token, internet access for syncing, Node.js **24+** with npm, and Git for the install command below. Check your Node version with `node --version`. Get the token from Ed's API-token settings for your region; `setup` prints the relevant URL.
 
-From a checkout on **macOS or Linux**:
+In **Windows Command Prompt**, or on **macOS or Linux**, run this from any directory:
 
 ```sh
-npm ci
-npm pack
-npm install --global ./ed-recall-0.2.0.tgz
+npm install --global github:chwu7/ed-recall
 ed-recall setup
 ```
 
-From a checkout in **Windows PowerShell**:
+In **Windows PowerShell**, run:
 
 ```powershell
-npm.cmd ci
-npm.cmd pack
-npm.cmd install --global .\ed-recall-0.2.0.tgz
+npm.cmd install --global github:chwu7/ed-recall
 ed-recall.cmd setup
 ```
 
-If you have not cloned the repository yet, run `git clone https://github.com/chwu7/ed-recall.git` and `cd ed-recall` first. `npm pack` builds and verifies the package; it does not publish it. The `.tgz` is an npm-installable file. If the global command is missing, reopen your terminal and check `npm prefix --global`: that directory must be on PATH on Windows, and its `bin` directory on macOS/Linux. You can also run `node bin/ed-recall.mjs setup` from this checkout after `npm ci`.
+You do **not** need to clone the repository or choose an install directory. npm installs the command globally, so an agent can find it from any working directory. This GitHub install was checked against the package's current main branch. It does not publish anything. `npm install ed-recall` currently cannot fetch this project from the npm registry; without `--global`, npm would also install a package only in the current project. If the installed command is missing, reopen your terminal and check `npm prefix --global`: that directory must be on PATH on Windows, and its `bin` directory on macOS/Linux.
 
-Windows npm creates an `ed-recall.cmd` launcher and an `ed-recall.ps1` launcher. PowerShell may block the `.ps1` launcher under its script policy, so these instructions call **`ed-recall.cmd`**. Command Prompt can use `ed-recall` or `ed-recall.cmd`. The agent uses the same installed package; the launcher is just how it starts the local engine on Windows.
+For local development or an offline tarball install, clone the repository, run `npm ci` and `npm pack`, then install `./ed-recall-0.2.0.tgz` with `npm install --global`. The tarball build does not publish the package.
+
+Windows npm creates an `ed-recall.cmd` launcher and an `ed-recall.ps1` launcher. Command Prompt can use **`ed-recall setup`**. PowerShell on this machine blocks npm's `.ps1` launcher under its current script policy, so its commands need **`ed-recall.cmd`**. The agent uses the same installed package; the launcher is just how it starts the local engine on Windows.
 
 During setup, select the region that matches your Ed URL, enter the token in the hidden prompt, select at least one accessible course, then select the agent(s) whose skill you want to install. If you skipped skill installation, run `ed-recall skill install --target codex` later, replacing `codex` with `pi`, `claude`, or `all` as needed (use `ed-recall.cmd` in PowerShell). The installer copies only `SKILL.md`; it does not alter an agent's settings.
 
