@@ -87,6 +87,8 @@ For manual installation, run `ed-recall skill path` to print the bundled file lo
 
 Use `sync` or `sync <course-code-or-id>` as the skill request to resume pending work or start a new Ed scan. Use `resume` (optionally followed by a course) to retry only unfinished courses. Course codes must match exactly, ignoring case; if the same code exists in two terms, use the numeric course ID. To remove the skill, delete the installed `ed-recall` skill directory after checking its contents.
 
+Use `list` in the skill (for example, `/skill:ed-recall list` in Pi) to see the courses selected for sync, their terms and IDs, active/archived status, archived thread counts, last successful sync timestamps, and current/incomplete/stale sync state. It also shows the newest archived original thread with its title, Ed link, posted date, and any coverage warnings. This reads cached course metadata and Markdown offline, without fetching threads or starting a sync. The newest archived thread is determined by creation date; edits do not make an old post the newest thread. Courses with no archive are shown as not yet synced, and local historical threads from deselected courses are excluded from the selected-course totals.
+
 ## How sync and search work
 
 The first sync walks all accessible thread-list pages for each selected course and fetches the original post, answers, comments, and nested comments. Courses completed within the last 24 hours are skipped without listing or fetching their threads. Stale courses and explicit `--refresh` runs re-fetch every listed thread so edited replies and new comments are included even if Ed does not update a thread timestamp. Unchanged content is detected by hash and is not rewritten. That approach can take time on large courses.
@@ -121,6 +123,7 @@ The engine exposes JSON operations for the skill under `ed-recall agent ...`; th
 
 ```sh
 ed-recall agent status
+ed-recall agent list
 ed-recall agent courses
 ed-recall agent sync --course CS101
 ed-recall agent sync --resume

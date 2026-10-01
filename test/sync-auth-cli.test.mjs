@@ -197,7 +197,7 @@ test('agent JSON bridge, context, read and rebuild work with real local SQLite',
   const record = await normalized(threadResponse());
   await lock(dir, async () => { const index = new SearchIndex(dir); try { await syncCourses({ client: { async *threads() { yield '100'; }, async thread() { return record; } }, dir, courses: [course], index }); } finally { index.close(); } });
   const run = args => spawnSync(process.execPath, [resolve('bin/ed-recall.mjs'), '--data-dir', root, ...args], { encoding: 'utf8', env: { ...process.env, EDSTEM_TOKEN: '' } });
-  for (const args of [['agent', 'status'], ['agent', 'search', 'late submissions'], ['agent', 'context', 'late submissions'], ['agent', 'read', '100']]) {
+  for (const args of [['agent', 'status'], ['agent', 'list'], ['agent', 'search', 'late submissions'], ['agent', 'context', 'late submissions'], ['agent', 'read', '100']]) {
     const output = run(args); assert.equal(output.status, 0, output.stderr); assert.equal(JSON.parse(output.stdout).schemaVersion, 1);
   }
   assert.equal(JSON.parse(run(['agent', 'reindex']).stdout).indexedThreads, 1);

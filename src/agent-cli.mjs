@@ -8,6 +8,7 @@ import { SearchIndex } from './index-db.mjs';
 import { syncCourses, syncStatus } from './sync.mjs';
 import { installSkill, bundledSkill } from './skill.mjs';
 import { archiveFiles } from './archive.mjs';
+import { listCourses } from './course-list.mjs';
 
 const clean = value => redact(String(value)).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 const out = value => process.stdout.write(clean(value) + '\n');
@@ -23,6 +24,9 @@ One-time terminal commands:
 Recovery:
   ed-recall agent sync --resume [--course ID]
   ed-recall agent sync --refresh [--course ID]
+
+Local course overview:
+  ed-recall agent list
 
 Use the installed skill in your agent to sync and ask questions.
 The "agent" commands are a JSON interface used by that skill.
@@ -119,7 +123,7 @@ export async function main(argv = process.argv) {
     }
     if (words[0] !== 'agent') throw new Error('Unknown command. Run ed-recall --help.');
     const command = words[1];
-    if (!['status', 'courses', 'sync', 'search', 'context', 'read', 'reindex'].includes(command)) throw new Error('Unknown agent operation.');
+    if (!['status', 'list', 'courses', 'sync', 'search', 'context', 'read', 'reindex'].includes(command)) throw new Error('Unknown agent operation.');
     const online = async () => {
       const credential = await credentials.get();
       if (!credential.token) throw new Error('No token available. Run ed-recall setup in a terminal or supply EDSTEM_TOKEN.');
@@ -141,10 +145,15 @@ export async function main(argv = process.argv) {
         finally { index.close(); }
       });
     };
-    if (command === 'status') {
-      requireWords('agent', 'status');
+    if (command === 'status' || command === 'list') {
+      requireWords('agent', command);
       if (!config.activeAccount) { json({ configured: false, needsSync: true, dataDirectory: root, courses: [] }); return; }
       const { account, dir } = local();
+      if (command === 'list') {
+        json({ configured: true, account: config.activeAccount, dataDirectory: root, archiveDirectory: join(dir, 'archive'),
+          ...await listCourses(dir, account.selectedCourses, account.courses) });
+        return;
+      }
       const files = await archiveFiles(dir);
       json({ configured: true, account: config.activeAccount, dataDirectory: root, archiveDirectory: join(dir, 'archive'), archivedThreads: files.length,
         ...await syncStatus(dir, account.selectedCourses) });
