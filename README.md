@@ -22,9 +22,9 @@ npm.cmd install --global github:chwu7/ed-recall
 ed-recall.cmd setup
 ```
 
-Create a personal token at [Ed's API-token settings (US)](https://edstem.org/us/settings/api-tokens). During setup, choose your region, enter the token in the hidden prompt, select courses, and install the skill for your agent. Setup prints the token-settings URL for your region.
+Create a personal token at [Ed's API-token settings (US)](https://edstem.org/us/settings/api-tokens). During setup, choose your region, enter the token in the hidden prompt, select courses, and install the skill for your agent. Later setup runs offer **Use saved token** (default) or **Enter a new token**. A replacement is saved only after validation. Setup prints the token-settings URL for your region.
 
-To change course selection, rerun setup. If you skipped skill installation, run `ed-recall skill install --target pi`, using `codex`, `claude`, or `all` as needed. Restart your agent after installing or updating its skill.
+Add courses directly through the skill with `add <course-id-or-code>`; rerun setup to change the full selection. If you skipped skill installation, run `ed-recall skill install --target pi`, using `codex`, `claude`, or `all` as needed. Restart your agent after installing or updating its skill.
 
 ## Use the skill
 
@@ -34,6 +34,7 @@ To change course selection, rerun setup. If you skipped skill installation, run 
 | Resume | `/skill:ed-recall resume` | `$ed-recall resume` | `/ed-recall resume` |
 | Refresh | `/skill:ed-recall refresh` | `$ed-recall refresh` | `/ed-recall refresh` |
 | List courses | `/skill:ed-recall list` | `$ed-recall list` | `/ed-recall list` |
+| Add a course | `/skill:ed-recall add <course>` | `$ed-recall add <course>` | `/ed-recall add <course>` |
 | Ask a question | `/skill:ed-recall <question>` | `$ed-recall <question>` | `/ed-recall <question>` |
 
 For example: `/skill:ed-recall What are the midterm dates for 142A and what materials are allowed?` You can also ask in ordinary language; answers include links to supporting Ed threads.
@@ -41,6 +42,7 @@ For example: `/skill:ed-recall What are the midterm dates for 142A and what mate
 - **Sync** skips courses successfully synced within 24 hours. It resumes pending work and refreshes stale courses when no batch is pending.
 - **Resume** retries unfinished courses, skipping completed courses regardless of age.
 - **Refresh** starts a new scan and re-fetches all threads, including recently synced ones.
+- **Add** saves a course to your selection and immediately syncs only that course. You can give its ID/code or ask naturally; the agent shows choices if the course is unclear. Already selected courses are not duplicated, and the selection is preserved if sync is interrupted.
 - **List** shows selected courses, terms and IDs, sync status, archive counts, last successful sync times, and the newest archived thread with its date and Ed link. It works offline and includes failures or coverage warnings. The newest thread is determined by when it was posted, rather than last edited.
 
 To limit sync, resume, or refresh to one course, append its ID or exact course code: `/skill:ed-recall refresh 80155`. Use an ID if the same code exists in multiple terms. Questions can name the course naturally.
@@ -79,6 +81,7 @@ The underlying CLI returns JSON and is useful for troubleshooting or integration
 ed-recall agent list
 ed-recall agent status
 ed-recall agent courses
+ed-recall agent add 80155
 ed-recall agent sync --course 80155
 ed-recall agent sync --resume
 ed-recall agent sync --refresh --course 80155
@@ -88,7 +91,7 @@ ed-recall agent read 7138070
 ed-recall agent reindex
 ```
 
-`list` reads selected courses locally; `courses` fetches all accessible courses from Ed. `read` takes a thread's global ID. `reindex` rebuilds search from Markdown. Progress goes to stderr; exit code 1 means an error or incomplete sync. Warnings alone return code 0. `--resume` and `--refresh` cannot be combined. In PowerShell, use `ed-recall.cmd`.
+`list` reads selected courses locally; `courses` fetches all accessible courses from Ed. CLI `add` saves the selection; the skill follows it with a targeted sync. `read` takes a thread's global ID. `reindex` rebuilds search from Markdown. Progress goes to stderr; exit code 1 means an error or incomplete sync. Warnings alone return code 0. `--resume` and `--refresh` cannot be combined. In PowerShell, use `ed-recall.cmd`.
 
 ## Limitations
 

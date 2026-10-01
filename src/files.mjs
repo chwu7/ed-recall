@@ -24,13 +24,19 @@ export function accountDir(root, config) {
   if (!config.activeAccount || !/^(us|au|eu)-\d+$/.test(config.activeAccount)) throw new Error('No local account. Run ed-recall setup first.');
   return join(root, 'accounts', config.activeAccount);
 }
-export async function bindAccount(root, config, region, identity) {
-  const key = `${region}-${identity.userId}`;
-  config.region = region; config.activeAccount = key;
-  config.accounts[key] ??= { selectedCourses: [] };
-  config.accounts[key].courses = identity.courses;
-  await saveConfig(root, config);
-  return config.accounts[key];
+export async function bindAccount(root, config, region, identity, update = () => {}) {
+  // Reload under a separate config lock so concurrent course additions or online
+  // operations cannot overwrite a selection saved after their initial config read.
+  return lock(root, async () => {
+    const current = await loadConfig(root), key = `${region}-${identity.userId}`;
+    current.region = region; current.activeAccount = key;
+    const account = current.accounts[key] ??= { selectedCourses: [] };
+    account.courses = identity.courses;
+    await update(account);
+    await saveConfig(root, current);
+    Object.assign(config, current);
+    return account;
+  });
 }
 export async function lock(dir, task) {
   await mkdir(dir, { recursive: true, mode: 0o700 });

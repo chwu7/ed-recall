@@ -1,8 +1,9 @@
-import { password, checkbox, select, confirm } from '@inquirer/prompts';
+import { checkbox, select, confirm } from '@inquirer/prompts';
 import { mkdir, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { dataRoot, loadConfig, saveConfig, bindAccount, accountDir, lock } from './files.mjs';
-import { Credentials, rememberSecret, redact } from './auth.mjs';
+import { dataRoot, loadConfig, bindAccount, accountDir, lock } from './files.mjs';
+import { Credentials, redact } from './auth.mjs';
+import { authenticateSetup } from './setup-auth.mjs';
 import { EdClient, validRegion } from './core/api.mjs';
 import { SearchIndex } from './index-db.mjs';
 import { syncCourses, syncStatus } from './sync.mjs';
@@ -27,6 +28,7 @@ Recovery:
 
 Local course overview:
   ed-recall agent list
+  ed-recall agent add <id-or-code>
 
 Use the installed skill in your agent to sync and ask questions.
 The "agent" commands are a JSON interface used by that skill.
@@ -79,22 +81,12 @@ export async function main(argv = process.argv) {
     if (words[0] === 'setup') {
       requireWords('setup'); requireTerminal();
       const selectedRegion = options['--region'] || await select({ message: 'Ed region (from your Ed URL):', choices: ['us', 'au', 'eu'].map(value => ({ name: value.toUpperCase(), value })), default: region });
-      let token, source;
-      if (process.env.EDSTEM_TOKEN?.trim()) { token = rememberSecret(process.env.EDSTEM_TOKEN.trim()); source = 'environment'; }
-      else {
-        out(`Create a personal API token at https://edstem.org/${selectedRegion}/settings/api-tokens`);
-        token = rememberSecret((await password({ message: 'Ed API token (hidden):', mask: false })).trim());
-        if (!token) throw new Error('Token cannot be empty.');
-        source = 'credential-store';
-      }
-      const identity = await new EdClient({ token, region: selectedRegion }).user();
-      if (source === 'credential-store') await new Credentials(root, selectedRegion).save(token);
+      const { identity, source } = await authenticateSetup({ root, region: selectedRegion, notify: out });
       const account = await bindAccount(root, config, selectedRegion, identity);
-      if (!identity.courses.length) throw new Error('Ed returned no accessible courses for this account and region.');
-      account.selectedCourses = await checkbox({ message: 'Courses to archive:', required: true,
+      const selectedCourses = await checkbox({ message: 'Courses to archive:', required: true,
         choices: identity.courses.map(c => ({ name: `${c.code} — ${c.name} (${c.year} ${c.session}; ${c.status}; ID ${c.id})`, value: c.id, checked: account.selectedCourses.includes(c.id) })) });
-      await saveConfig(root, config);
-      out(`Authentication: ${source}. Selected ${account.selectedCourses.length} course(s).`);
+      await bindAccount(root, config, selectedRegion, identity, account => { account.selectedCourses = selectedCourses; });
+      out(`Authentication: ${source}. Selected ${selectedCourses.length} course(s).`);
       if (await confirm({ message: 'Install or update the ed-recall agent skill?', default: true })) {
         const targets = await checkbox({ message: 'Install for:', required: true, choices: ['pi', 'codex', 'claude'].map(value => ({ name: value, value })) });
         for (const target of targets) out((await installSkill(target)).path);
@@ -123,12 +115,13 @@ export async function main(argv = process.argv) {
     }
     if (words[0] !== 'agent') throw new Error('Unknown command. Run ed-recall --help.');
     const command = words[1];
-    if (!['status', 'list', 'courses', 'sync', 'search', 'context', 'read', 'reindex'].includes(command)) throw new Error('Unknown agent operation.');
-    const online = async () => {
+    if (!['status', 'list', 'courses', 'add', 'sync', 'search', 'context', 'read', 'reindex'].includes(command)) throw new Error('Unknown agent operation.');
+    const online = async ({ bind = true } = {}) => {
       const credential = await credentials.get();
       if (!credential.token) throw new Error('No token available. Run ed-recall setup in a terminal or supply EDSTEM_TOKEN.');
       const client = new EdClient({ token: credential.token, region });
       const identity = await client.user();
+      if (!bind) return { client, identity };
       const account = await bindAccount(root, config, region, identity);
       return { client, identity, account, dir: accountDir(root, config) };
     };
@@ -163,6 +156,17 @@ export async function main(argv = process.argv) {
       requireWords('agent', 'courses');
       const { identity, account } = await online();
       json({ courses: identity.courses.map(c => ({ ...c, selected: account.selectedCourses.includes(c.id) })) }); return;
+    }
+    if (command === 'add') {
+      if (words.length !== 3) throw new Error('Use agent add <id-or-code>. Run agent courses to see accessible courses.');
+      const { identity } = await online({ bind: false });
+      const course = resolveCourse(identity.courses, words[2]);
+      let added = false;
+      const account = await bindAccount(root, config, region, identity, account => {
+        added = !account.selectedCourses.includes(course.id);
+        if (added) account.selectedCourses.push(course.id);
+      });
+      json({ course, added, selectedCourses: account.selectedCourses }); return;
     }
     if (command === 'sync') {
       requireWords('agent', 'sync');
