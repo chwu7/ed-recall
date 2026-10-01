@@ -1,180 +1,116 @@
 # ed-recall
 
-Ask an agent about your Ed Discussion threads and get answers linked to the original conversations. `ed-recall` saves the threads you can access as Markdown and keeps a local SQLite search index. It uses your **Ed API token**. It does not ask for your Ed password or scrape browser cookies.
+Ask Pi, Codex, or Claude Code about your Ed Discussion threads and get answers linked to the original conversations. `ed-recall` archives accessible posts and replies as Markdown and provides local search using your **Ed API token**.
 
-**This version is not published to the npm registry.** Install it directly from GitHub with npm. Ed describes its API as beta; the adapter has fixture coverage and a limited US live-account check. See [API limitations](#api-limitations) and [the live-account check](#check-with-your-ed-account).
-
-## The workflow
-
-1. Install Node.js 24 or newer and Git, then install this package with npm.
-2. Create a token at [Ed's API-token settings (US)](https://edstem.org/us/settings/api-tokens), then run **`ed-recall setup` once** in a normal terminal. It prompts for the token without displaying it, lets you choose courses, and offers to install the agent skill. For another region, use the matching Ed settings page; setup prints its URL.
-3. Open Pi, Codex, or Claude Code. Invoke the skill to sync, then ask a question:
-
-   | Agent | Sync | Ask |
-   | --- | --- | --- |
-   | Claude Code | `/ed-recall sync` | `/ed-recall What materials did my professor allow during the midterm? Cite the threads.` |
-   | Pi | `/skill:ed-recall sync` | `/skill:ed-recall What materials did my professor allow during the midterm? Cite the threads.` |
-   | Codex | `$ed-recall sync` | `$ed-recall What materials did my professor allow during the midterm? Cite the threads.` |
-
-These are **agent skill invocations** in the agent's chat, not commands to type in PowerShell. They follow the current [Claude Code](https://code.claude.com/docs/en/skills), [Pi](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md), and [Codex](https://learn.chatgpt.com/docs/build-skills) skill conventions. You can also ask in ordinary language, such as “Using ed-recall, what did staff say about late submissions? Cite the threads.” If your agent does not discover the skill, restart its session after installation.
-
-`sync` skips courses successfully synced within the last 24 hours. Use `refresh` in the skill, or `ed-recall agent sync --refresh`, when you want an immediate rescan. For a question, the skill checks archive status and syncs when needed, searches relevant passages, reads surrounding thread content, and writes the answer with Ed links. If it cannot find enough evidence, it should say so. The local engine performs keyword search; **the agent** interprets the evidence and composes the answer. No external AI service is called by the engine itself.
+Ed's API is in beta. The adapter has automated tests and a limited US live-account check; see [API evidence and limitations](docs/API.md).
 
 ## Install and set up
 
-You need an Ed account with access to Discussion, a personal API token, internet access for syncing, Node.js **24+** with npm, and Git for the install command below. Check your Node version with `node --version`. Get the token from Ed's API-token settings for your region; `setup` prints the relevant URL.
+Requires **Node.js 24+**, npm, Git, and an Ed account with access to Discussion.
 
-In **Windows Command Prompt**, or on **macOS or Linux**, run this from any directory:
+**macOS, Linux, or Windows Command Prompt:**
 
 ```sh
 npm install --global github:chwu7/ed-recall
 ed-recall setup
 ```
 
-In **Windows PowerShell**, run:
+**Windows PowerShell:**
 
 ```powershell
 npm.cmd install --global github:chwu7/ed-recall
 ed-recall.cmd setup
 ```
 
-You do **not** need to clone the repository or choose an install directory. npm installs the command globally, so an agent can find it from any working directory. This GitHub install was checked against the package's current main branch. It does not publish anything. `npm install ed-recall` currently cannot fetch this project from the npm registry; without `--global`, npm would also install a package only in the current project. If the installed command is missing, reopen your terminal and check `npm prefix --global`: that directory must be on PATH on Windows, and its `bin` directory on macOS/Linux.
+Create a personal token at [Ed's API-token settings (US)](https://edstem.org/us/settings/api-tokens). During setup, choose your region, enter the token in the hidden prompt, select courses, and install the skill for your agent. Setup prints the token-settings URL for your region.
 
-For local development or an offline tarball install, clone the repository, run `npm ci` and `npm pack`, then install `./ed-recall-0.2.0.tgz` with `npm install --global`. The tarball build does not publish the package.
+To change course selection, rerun setup. If you skipped skill installation, run `ed-recall skill install --target pi`, using `codex`, `claude`, or `all` as needed. Restart your agent after installing or updating its skill.
 
-Windows npm creates an `ed-recall.cmd` launcher and an `ed-recall.ps1` launcher. Command Prompt can use **`ed-recall setup`**. PowerShell on this machine blocks npm's `.ps1` launcher under its current script policy, so its commands need **`ed-recall.cmd`**. The agent uses the same installed package; the launcher is just how it starts the local engine on Windows.
+## Use the skill
 
-During setup, select the region that matches your Ed URL, enter the token in the hidden prompt, select at least one accessible course, then select the agent(s) whose skill you want to install. If you skipped skill installation, run `ed-recall skill install --target codex` later, replacing `codex` with `pi`, `claude`, or `all` as needed (use `ed-recall.cmd` in PowerShell). The installer copies only `SKILL.md`; it does not alter an agent's settings.
+| Request | Pi | Codex | Claude Code |
+| --- | --- | --- | --- |
+| Sync | `/skill:ed-recall sync` | `$ed-recall sync` | `/ed-recall sync` |
+| Resume | `/skill:ed-recall resume` | `$ed-recall resume` | `/ed-recall resume` |
+| Refresh | `/skill:ed-recall refresh` | `$ed-recall refresh` | `/ed-recall refresh` |
+| List courses | `/skill:ed-recall list` | `$ed-recall list` | `/ed-recall list` |
+| Ask a question | `/skill:ed-recall <question>` | `$ed-recall <question>` | `/ed-recall <question>` |
 
-### Token storage and automation
+For example: `/skill:ed-recall What are the midterm dates for 142A and what materials are allowed?` You can also ask in ordinary language; answers include links to supporting Ed threads.
 
-The token is stored in the OS credential store: Windows Credential Manager, macOS Keychain, or Linux Secret Service (for example, an unlocked GNOME Keyring). It is scoped to the data directory and Ed region. The package's optional keyring dependency must be available. **There is no plaintext token-file fallback.** If the credential store is unavailable, set `EDSTEM_TOKEN` in the environment used by setup or the agent. The environment token takes precedence over a saved token. Supply it through a private shell or your automation system's secret facility; never put it in a command argument, issue, chat, Markdown export, or repository file.
+- **Sync** skips courses successfully synced within 24 hours. It resumes pending work and refreshes stale courses when no batch is pending.
+- **Resume** retries unfinished courses, skipping completed courses regardless of age.
+- **Refresh** starts a new scan and re-fetches all threads, including recently synced ones.
+- **List** shows selected courses, terms and IDs, sync status, archive counts, last successful sync times, and the newest archived thread with its date and Ed link. It works offline and includes failures or coverage warnings. The newest thread is determined by when it was posted, rather than last edited.
 
-For an interactive Linux/macOS shell, this avoids typing the token into shell history:
+To limit sync, resume, or refresh to one course, append its ID or exact course code: `/skill:ed-recall refresh 80155`. Use an ID if the same code exists in multiple terms. Questions can name the course naturally.
 
-```sh
-read -rsp 'Ed API token: ' EDSTEM_TOKEN; printf '\n'
-export EDSTEM_TOKEN
-ed-recall setup
-unset EDSTEM_TOKEN
-```
+### Skill locations
 
-In PowerShell:
-
-```powershell
-$secret = Read-Host 'Ed API token' -AsSecureString
-$env:EDSTEM_TOKEN = [System.Net.NetworkCredential]::new('', $secret).Password
-ed-recall.cmd setup
-Remove-Item Env:EDSTEM_TOKEN
-Remove-Variable secret
-```
-
-If you use an environment token because your OS store is unavailable, keep it available to the **agent process** when syncing. For noninteractive automation, inject `EDSTEM_TOKEN` and run `ed-recall agent sync --course <numeric-id>`; that binds the account and creates a local archive without the setup prompts. `ed-recall logout` removes the stored credential for the current data directory and region; it cannot unset a variable in its parent shell. Local archives remain after logout. Setup validates the token online and binds the active local archive to the Ed account returned by the API.
-
-## Using the skill
-
-Install locations:
-
-| Agent | User skill file |
+| Agent | Skill file |
 | --- | --- |
 | Pi | `~/.pi/agent/skills/ed-recall/SKILL.md` |
 | Codex | `~/.agents/skills/ed-recall/SKILL.md` |
 | Claude Code | `~/.claude/skills/ed-recall/SKILL.md` |
 
-`~` is your home directory, including on Windows. The installer leaves identical content alone and refuses to overwrite a modified skill unless you use `--force`. For Codex, it recognizes the old version installed at `~/.codex/skills/ed-recall/SKILL.md`, migrates an unchanged copy, and stops for manual review if you changed that copy. This avoids two versions of the same skill being discovered.
+The installer protects modified copies; use `--force` when intentionally replacing one. `ed-recall skill path` prints the bundled skill location.
 
-For manual installation, run `ed-recall skill path` to print the bundled file location, then copy that file to the directory in the table. From this checkout, the file is [skills/ed-recall/SKILL.md](skills/ed-recall/SKILL.md). Restart the agent after adding or changing a skill. The agent needs shell access to the installed `ed-recall` command, access to the local archive, and network access when syncing; its own sandbox or approval settings may affect those operations. An agent can answer from an existing archive while offline, with the archive's freshness disclosed.
+## Credentials and local data
 
-Use `sync` or `sync <course-code-or-id>` as the skill request to resume pending work or start a new Ed scan. Use `resume` (optionally followed by a course) to retry only unfinished courses. Course codes must match exactly, ignoring case; if the same code exists in two terms, use the numeric course ID. To remove the skill, delete the installed `ed-recall` skill directory after checking its contents.
+Tokens are saved in Windows Credential Manager, macOS Keychain, or Linux Secret Service. If the store is unavailable, supply `EDSTEM_TOKEN` to setup and the agent process; it overrides a saved token. No plaintext token file is created. Keep tokens out of chat, command arguments, and Git.
 
-Use `list` in the skill (for example, `/skill:ed-recall list` in Pi) to see the courses selected for sync, their terms and IDs, active/archived status, archived thread counts, last successful sync timestamps, and current/incomplete/stale sync state. It also shows the newest archived original thread with its title, Ed link, posted date, and any coverage warnings. This reads cached course metadata and Markdown offline, without fetching threads or starting a sync. The newest archived thread is determined by creation date; edits do not make an old post the newest thread. Courses with no archive are shown as not yet synced, and local historical threads from deselected courses are excluded from the selected-course totals.
-
-## How sync and search work
-
-The first sync walks all accessible thread-list pages for each selected course and fetches the original post, answers, comments, and nested comments. Courses completed within the last 24 hours are skipped without listing or fetching their threads. Stale courses and explicit `--refresh` runs re-fetch every listed thread so edited replies and new comments are included even if Ed does not update a thread timestamp. Unchanged content is detected by hash and is not rewritten. That approach can take time on large courses.
-
-Requests are sequential and spaced at least 500 ms apart. The client has timeouts and bounded retries for network errors, HTTP 429, and server errors. After request retries are exhausted, sync automatically retries unfinished work once for network/server failures. Authentication errors and exhausted rate limits stop the run; other thread failures are recorded while remaining threads and courses continue. It uses only your token's permissions.
-
-Sync checkpoints each archived thread and tracks the pending course batch. After an interruption, invoking sync again resumes pending work and skips finished courses. Once the batch finishes, later syncs skip recent courses and refresh stale ones. `ed-recall agent sync --resume` explicitly retries only unfinished courses; it does nothing when all selected courses are complete, even if stale. `--refresh` deliberately starts a new snapshot in the selected scope, including any unfinished courses; it cannot be combined with `--resume`. Concurrent writers are blocked by a local lock, and a dead process's lock is recovered on restart. Previously archived threads remain in the local historical archive if they later disappear from Ed or become inaccessible.
-
-The agent skill uses a long shell timeout or a persistent process handle, checks status even after failure, and automatically resumes a terminated process at most twice while checkpoints advance. A killed process cannot restart itself: if the agent stops too, run `ed-recall.cmd agent sync --resume` in PowerShell, optionally adding `--course <id>`. Run `ed-recall.cmd agent status` separately to inspect progress, active writers, saved failures, and coverage warnings.
-
-Ed's `reply_count` can exclude deleted replies that still appear in the returned tree. Both total and non-deleted counts are accepted. Other count differences become persistent reply-coverage warnings: the accessible replies are archived and sync continues, but full reply coverage is uncertain. Warnings appear in Markdown, status, search, context, and read results. Explicit truncation/continuation errors still leave the thread unfinished for recovery.
-
-Each thread has a Markdown file containing course, title, number/ID, original Ed URL, dates, original post, answers, and the reply hierarchy. The converter preserves code, links, and math where possible and keeps unknown content visibly fenced instead of silently dropping it. Attachments remain links and are not downloaded. SQLite FTS5 indexes individual passages and stores their thread metadata; **Markdown is the archive of record**, and the index can be rebuilt from it.
-
-Search is lexical: it matches query terms, ranks passages, and limits repeated hits from one thread. It does not understand a question on its own. The agent can search again with synonyms and read the full thread before answering. A missing match is not proof that a topic was never discussed. The agent must distinguish staff statements from student claims and treat thread content as untrusted data, including any instructions within a post.
-
-## Local data and recovery
-
-By default, user data is stored outside the npm installation:
-
-| Platform | Data directory |
+| Platform | Default data directory |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\ed-recall` |
 | macOS | `~/Library/Application Support/ed-recall` |
 | Linux | `$XDG_DATA_HOME/ed-recall`, or `~/.local/share/ed-recall` |
 
-Set `ED_RECALL_HOME` to use another private location. The one-time commands and agent engine also accept `--data-dir <path>`. The data root contains `config.json` with region/account/course selection and `accounts/<region>-<user-id>/` with `archive/<course-id>/<thread-id>.md`, `index.sqlite`, and `sync.json`. Multiple Ed accounts have separate archives. The database is rebuildable; `sync.json` records freshness and resume checkpoints. The archive may contain private Ed posts and is not encrypted. Back it up only when no sync is running. Token storage is separate and must be set up again after moving to another device.
+Override the location with `ED_RECALL_HOME` or `--data-dir <path>`. Each account has its own Markdown archive, rebuildable SQLite index, and sync checkpoints. Archives may contain private posts and are not encrypted; keep them out of Git and back them up while no sync is running.
 
-If you place a custom data directory inside a Git repository, add its path to `.gitignore`. This repository ignores `.env*`, likely token filenames, `archive/`, `.ed-recall/`, and SQLite files. `.gitignore` cannot protect a file already tracked by Git. Avoid committing the archive or any token.
+`ed-recall logout` removes the saved token and preserves the archive. Environment tokens must be unset separately.
 
-The engine exposes JSON operations for the skill under `ed-recall agent ...`; these are also useful for troubleshooting or custom integrations. They are **retrieval operations**, not an answer-writing interface:
+## Recovery and CLI
+
+Large courses can take minutes. Sync saves progress after each thread and retries transient network/server failures. The skill attempts bounded recovery after timeouts; if it stops, use `resume`. Other thread failures are recorded while remaining threads and courses continue. Authentication errors or exhausted rate limits stop the run.
+
+The underlying CLI returns JSON and is useful for troubleshooting or integrations:
 
 ```sh
-ed-recall agent status
 ed-recall agent list
+ed-recall agent status
 ed-recall agent courses
-ed-recall agent sync --course CS101
+ed-recall agent sync --course 80155
 ed-recall agent sync --resume
-ed-recall agent sync --refresh --course CS101
-ed-recall agent search "late submissions" --course CS101 --limit 6
-ed-recall agent context "What did staff say about late submissions?" --course CS101
-ed-recall agent read 987654
+ed-recall agent sync --refresh --course 80155
+ed-recall agent search "midterm" --course 80155 --limit 6
+ed-recall agent context "What materials are allowed?" --course 80155
+ed-recall agent read 7138070
 ed-recall agent reindex
 ```
 
-Use `ed-recall.cmd` in PowerShell. `read` takes the global thread ID returned by search, not the course's displayed thread number. `context` accepts `--max-chars` (default 16000). The JSON has `schemaVersion: 1`; search/context include archive freshness. Sync reports include final status, retries, and skipped course IDs. Status includes per-course checkpoint/total counts, saved failures, and `coverageUncertain`; `syncRunning` indicates another live archive writer. Progress and diagnostics go to stderr. Exit code 1 means an error or incomplete sync; warnings alone return code 0 and remain visible for retrieval. The skill handles these operations; most users only need setup and the agent's chat.
+`list` reads selected courses locally; `courses` fetches all accessible courses from Ed. `read` takes a thread's global ID. `reindex` rebuilds search from Markdown. Progress goes to stderr; exit code 1 means an error or incomplete sync. Warnings alone return code 0. `--resume` and `--refresh` cannot be combined. In PowerShell, use `ed-recall.cmd`.
 
-## API limitations
+## Limitations
 
-The Ed adapter is isolated in `src/core/api.mjs`; content conversion is in `src/core/content.mjs`. `ed-recall/core` exports these reusable modules for a future browser version. Fetch and sleep are injectable for tests. Browser authentication, CORS, persistence, and UI still need separate work.
+Search uses keywords; the agent interprets evidence and writes the answer. Attachments remain links, with no downloads or OCR. Lessons, chat, private messages, and automatic scheduled syncing are not supported.
 
-Ed's API is described as beta and its thread routes are incompletely documented. This project reviewed public client source and documentation on 2026-09-30 and tested representative synthetic responses. A limited US live-account check found deleted replies excluded from two reply counters and one unexplained counter discrepancy; no private responses are stored in this repository. The expected reply arrays and defensive pagination handling may need adjustment for large threads. Unknown continuation shapes fail visibly; unexplained reply counts are archived with coverage warnings. A completed sync means the supported accessible responses were processed, and does not prove that Ed returned every reply. See [API evidence and assumptions](docs/API.md).
-
-Other limits: no attachment download or OCR; no lessons, chat, or private messages; no semantic embeddings; no browser app; no automatic sync schedule. The Windows credential store was smoke tested with a synthetic secret; macOS/Linux credential storage and live Ed behavior remain unverified. A course with private posts is limited to what the token owner may access.
-
-## Check with your Ed account
-
-Do not paste your token into chat, an issue, or a command argument. After local installation, use your own account and a course you may access:
-
-1. Run `ed-recall setup` in a terminal. Close it, open a new terminal, and use the installed skill to request `sync` (or run `ed-recall agent sync --course <real-id-or-code>`). Confirm the saved credential works without `EDSTEM_TOKEN` if you chose OS storage.
-2. Run `ed-recall agent status` and `ed-recall agent courses`. Confirm selection, account, completion, and thread counts. Inspect the Markdown files under the reported data directory.
-3. In a course with **over 100 accessible threads**, compare the oldest, newest, and pinned threads with Ed. A smaller course cannot validate multipage listing.
-4. Compare a thread with an original post, answer, comment, and nested comment against the Markdown and `ed-recall agent read <thread-id>`. Check hierarchy, author roles, dates, code/math, reply counts, and returned URL. Test a large thread to discover whether Ed paginates replies in a different format.
-5. If posting is allowed, add a test nested comment in Ed, run `agent sync --refresh`, edit it in Ed, and refresh again. Confirm the Markdown and `agent search` reflect the latest text without duplicates. A second unchanged refresh should have `changed: 0`; ordinary sync should skip the recent course with `fetched: 0`.
-6. Interrupt a sync with Ctrl+C after several threads, invoke sync again, and confirm completion. Run `ed-recall agent reindex` and repeat a search to verify index rebuild. Ask the skill an evidence question and an unrelated question; check citations and the insufficient-evidence response.
-
-The CLI sends no posts or edits to Ed. If the beta API response differs, capture only a **sanitized structural example**: route, status, keys, array nesting, and the error. Remove authorization headers, private text, names, and identifying IDs before sharing it.
+Unexpected reply counts produce persistent coverage warnings while accessible replies are archived. Unsupported continuation or reply structures leave the affected thread unfinished. A successful sync can still have uncertain reply coverage. Previously archived threads are retained if they later disappear from Ed.
 
 ## Troubleshooting
 
-| Symptom | Action |
+| Problem | Action |
 | --- | --- |
-| PowerShell says scripts are disabled | Use `npm.cmd` and `ed-recall.cmd`; no execution-policy change is needed. |
-| `node:sqlite` or FTS5 is unavailable | Install a standard Node.js 24+ build. |
-| Credential store unavailable or locked | Unlock/install the OS store and optional keyring dependency, or provide `EDSTEM_TOKEN` to setup and the agent process. No token file fallback exists. |
-| HTTP 401 | Check token validity, selected region, and whether `EDSTEM_TOKEN` overrides a saved token. Re-run setup. |
-| HTTP 403/404 | Check access in Ed; a removed thread may remain in the local archive. |
-| HTTP 429 or interrupted sync | After a rate-limit pause, run `agent sync --resume`. If status says `syncRunning: true`, observe the existing writer first. |
-| Reply-coverage warning | Accessible replies were archived; full coverage is uncertain. Compare with Ed and inspect the API shape before treating the thread as complete evidence. |
-| A reply collection or page is rejected | The beta API may have changed. Follow the live-account check and add a sanitized fixture before adapting `src/core/api.mjs`. |
-| No evidence for a question | Check archive freshness and course selection, sync, try shorter terms/synonyms, or read a known thread. |
-| Index unreadable | With no other ed-recall process running, run `ed-recall agent reindex`; Markdown is retained. |
-| Writer lock persists | Confirm no ed-recall process is running before removing the reported `writer.lock` or `writer-recovery.lock`. |
-| Skill is not discovered | Check the path above, restart the agent, and ensure its shell can find `ed-recall`. |
-
-To uninstall the package, run `npm uninstall --global ed-recall`. Remove installed skill copies separately. To delete local data, inspect its path first, stop running ed-recall processes, run `ed-recall logout` for saved credentials, then remove the data directory yourself.
+| Command or skill missing | Reopen the terminal or restart the agent; check PATH and the skill location above. |
+| PowerShell blocks scripts | Use `npm.cmd` and `ed-recall.cmd`. |
+| SQLite/FTS5 unavailable | Install a standard Node.js 24+ build. |
+| Credential store unavailable | Unlock the store and check the optional keyring dependency, or supply `EDSTEM_TOKEN`. |
+| HTTP 401 | Check token validity, region, and environment overrides; rerun setup. |
+| HTTP 403/404 | Check course/thread access in Ed. |
+| Interrupted sync or HTTP 429 | Check status, wait if rate limited, then resume. If `syncRunning` is true, let the existing writer finish. |
+| Coverage warning or rejected replies | Compare with Ed; report a sanitized structural example without private text or credentials. |
+| Weak search results | Try shorter keywords or synonyms and read relevant threads. |
+| Index unreadable | Stop other writers, then run `ed-recall agent reindex`. |
+| Persistent writer lock | Confirm no ed-recall process is running before removing the reported lock file. |
 
 ## Development
 
@@ -185,4 +121,4 @@ npm run build
 npm pack --dry-run
 ```
 
-The build checks executable JavaScript, the bundled skill, and FTS5. Tests use synthetic Ed API fixtures, temporary archives, real SQLite, mocked credentials, and command subprocesses. They cover pagination, nested comments, incremental updates and resume, Markdown conversion, local search, account isolation, and skill installation. They do not contact Ed or read your saved token.
+Tests use synthetic API fixtures, temporary archives, SQLite, and mocked credentials; they do not contact Ed. For a local install, run `npm pack` and install the generated tarball globally. API assumptions and verification details are in [docs/API.md](docs/API.md).

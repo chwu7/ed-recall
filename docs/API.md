@@ -32,7 +32,7 @@ Some beta shape changes can only be detected with live comparison (for example, 
 
 ## Verification procedure
 
-Follow the complete command sequence and comparison checklist in the [README](../README.md#manual-smoke-test-with-your-ed-account). Live verification must include a course with more than one listing page and a sufficiently large discussion to exercise any reply pagination. Do not equate success on a small thread with completeness for all threads.
+For live verification, run setup and sync an accessible course with more than one listing page. Compare the oldest, newest, and pinned posts with Ed, including a large discussion with nested replies. Check hierarchy, author roles, dates, code/math, and URLs. Verify edits with `agent sync --refresh`, interrupt a run and recover with `agent sync --resume`, then rebuild the index and repeat a search. Do not equate success on a small thread with completeness for all threads.
 
 The CLI has no live mutation routes. To test updates, add/edit replies manually only in a course where you are allowed to do so. Tests must not cause posts, messages, or notifications automatically.
 
